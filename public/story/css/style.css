@@ -617,7 +617,7 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding-top: 5.5rem;
+  padding-top: clamp(2rem, 8vh, 5.5rem);
   overflow-y: auto;
   background: linear-gradient(180deg, rgba(5, 6, 10, 0.4), rgba(5, 6, 10, 0.85));
 }
@@ -639,7 +639,7 @@ button {
   font-size: clamp(2rem, 4vw, 3.5rem);
   letter-spacing: 0.06em;
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: clamp(0.75rem, 2.5vh, 1.5rem);
   color: var(--c-ink);
 }
 .section__subtitle {
@@ -1316,7 +1316,6 @@ button {
   }
 }
 
-
 /* ---------- Countdown Screen Styles ---------- */
 .scene--countdown {
   background: radial-gradient(ellipse at center, #070d1a 0%, #030509 85%);
@@ -1446,4 +1445,318 @@ button {
   100% {
     opacity: 0.95;
   }
+}
+
+/* ---------- Interactive Mode Selectors ---------- */
+.room-modes {
+  display: inline-flex;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.35rem;
+  border-radius: 30px;
+  border: 1px solid rgba(217, 178, 106, 0.15);
+  margin: 0 auto clamp(1rem, 4vh, 2.5rem);
+  z-index: 5;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--c-ink-mute);
+  font-family: var(--f-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 0.6rem 1.4rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.4s var(--ease-out);
+}
+.mode-btn:hover {
+  color: var(--c-ink);
+}
+.mode-btn.active {
+  background: linear-gradient(135deg, var(--c-gold), var(--c-gold-soft));
+  color: #05060a;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(217, 178, 106, 0.3);
+}
+
+/* ---------- Memories Slideshow (Cinematic Flow) ---------- */
+.slideshow-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  position: relative;
+  min-height: 520px;
+}
+.slideshow-card-wrapper {
+  position: relative;
+  width: 100%;
+  height: 440px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slideshow-card {
+  position: absolute;
+  width: 320px;
+  background: #fdfbf7
+    linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(244, 238, 224, 0.25) 100%);
+  padding: 1.2rem 1.2rem 3rem;
+  box-shadow:
+    0 25px 55px rgba(0, 0, 0, 0.5),
+    0 5px 15px rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  z-index: 2;
+  transform-origin: center bottom;
+}
+.slideshow-card::before {
+  content: "";
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%) rotate(var(--tape-r, -2deg));
+  width: 85px;
+  height: 26px;
+  background: rgba(243, 237, 215, 0.55);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border-left: 1px dashed rgba(0, 0, 0, 0.06);
+  border-right: 1px dashed rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(1.5px);
+  z-index: 3;
+}
+.slideshow-card__img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #12131a center/cover no-repeat;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+.slideshow-card__caption {
+  font-family: var(--f-handwritten);
+  color: #2b241a;
+  text-align: center;
+  font-size: 1.7rem;
+  margin-top: 1.2rem;
+  line-height: 1.2;
+}
+.slideshow-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.slideshow-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(217, 178, 106, 0.25);
+  color: var(--c-gold);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.slideshow-btn:hover {
+  background: rgba(217, 178, 106, 0.15);
+  border-color: var(--c-gold);
+  transform: scale(1.08);
+  box-shadow: 0 0 15px rgba(217, 178, 106, 0.25);
+}
+.slideshow-btn.play-btn {
+  font-size: 0.75rem;
+  width: 48px;
+  height: 48px;
+  border-color: var(--c-gold-soft);
+}
+
+/* ---------- Journey in Motion (Horizontal Carousel) ---------- */
+.journey-motion-container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: visible;
+  padding: 2rem 0 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.journey-track-wrapper {
+  position: relative;
+  width: 100%;
+  height: clamp(480px, 62vh, 620px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.journey-track-line {
+  display: none !important;
+}
+.journey-track-progress {
+  display: none !important;
+}
+.journey-slides {
+  display: flex;
+  position: absolute;
+  height: 100%;
+  left: 50%;
+  align-items: center;
+  transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+.journey-slide-node {
+  position: relative;
+  flex-shrink: 0;
+  width: min(420px, 85vw);
+  margin: 0 clamp(10px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 3;
+  transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.journey-slide-node.active {
+  transform: scale(1.08);
+  z-index: 5;
+}
+.journey-slide-node.inactive {
+  opacity: 0.25;
+  transform: scale(0.8);
+  filter: blur(2px);
+  pointer-events: none;
+}
+.journey-node-card {
+  width: 100%;
+  max-height: min(58vh, 560px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: clamp(1.5rem, 5vw, 2.5rem) clamp(1.2rem, 4vw, 2.2rem);
+  background: linear-gradient(135deg, rgba(217, 178, 106, 0.14) 0%, rgba(232, 164, 176, 0.1) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(217, 178, 106, 0.3);
+  border-radius: 40px 4px 40px 4px; /* Signature leaf shape matching reasons */
+  box-shadow:
+    0 25px 50px rgba(0, 0, 0, 0.45),
+    0 0 20px rgba(217, 178, 106, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  text-align: center;
+  transition: all 0.5s;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(217, 178, 106, 0.4) transparent;
+}
+.journey-node-card::-webkit-scrollbar {
+  width: 5px;
+}
+.journey-node-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+.journey-node-card::-webkit-scrollbar-thumb {
+  background: rgba(217, 178, 106, 0.4);
+  border-radius: 3px;
+}
+.journey-slide-node.active .journey-node-card {
+  border-color: rgba(217, 178, 106, 0.6);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.55),
+    0 0 30px rgba(217, 178, 106, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  background: linear-gradient(135deg, rgba(217, 178, 106, 0.22) 0%, rgba(232, 164, 176, 0.15) 100%);
+}
+.journey-node-year {
+  display: block;
+  font-family: var(--f-display);
+  font-size: 0.9rem;
+  color: var(--c-gold-soft);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 1.2rem;
+  text-shadow: 0 0 10px rgba(217, 178, 106, 0.25);
+}
+.journey-node-title {
+  font-family: var(--f-display);
+  font-size: 1.5rem;
+  font-style: italic;
+  color: var(--c-ink);
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+.journey-node-desc {
+  color: rgba(244, 239, 230, 0.85);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- Reasons / Leaves in Motion ---------- */
+.reasons-motion-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  position: relative;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.reasons-leaf-wrapper {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reason-leaf-card {
+  position: absolute;
+  width: 100%;
+  max-width: 440px;
+  padding: 2.5rem 2.2rem;
+  background: linear-gradient(135deg, rgba(217, 178, 106, 0.14) 0%, rgba(232, 164, 176, 0.1) 100%);
+  border: 1px solid rgba(217, 178, 106, 0.35);
+  box-shadow:
+    0 25px 50px rgba(0, 0, 0, 0.45),
+    0 0 20px rgba(217, 178, 106, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  border-radius: 40px 4px 40px 4px; /* Organic leaf shape */
+  text-align: center;
+  cursor: pointer;
+  z-index: 2;
+  transform-origin: center center;
+}
+.reason-leaf-num {
+  display: block;
+  font-family: var(--f-display);
+  font-size: 0.9rem;
+  color: var(--c-gold-soft);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 1.2rem;
+  text-shadow: 0 0 10px rgba(217, 178, 106, 0.25);
+}
+.reason-leaf-text {
+  font-family: var(--f-display);
+  font-size: 1.5rem;
+  font-style: italic;
+  color: var(--c-ink);
+  line-height: 1.5;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }

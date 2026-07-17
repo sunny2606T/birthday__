@@ -7,7 +7,13 @@ import { music, finalVideo } from "../assets/media.js";
 import { audio } from "./engine/audioManager.js";
 import { scenes } from "./engine/sceneManager.js";
 import { createUniverse } from "./engine/particleEngine.js";
-import { renderMemories, renderVoice, renderTimeline, renderReasons } from "./scenes/rooms.js";
+import {
+  renderMemories,
+  renderVoice,
+  renderTimeline,
+  renderReasons,
+  stopAllRoomAnimations,
+} from "./scenes/rooms.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -92,7 +98,7 @@ updatePlanetDOM();
 // ---------- Music mapping per scene ----------
 const musicMap = {
   introScene: ["intro", music.intro],
-  passwordScene: ["password", music.password],
+  passwordScene: ["intro", music.intro],
   birthScene: ["birth", music.birth],
   galaxyScene: ["galaxy", music.galaxy],
   memoriesScene: ["memories", music.memories],
@@ -108,6 +114,9 @@ let surpriseMusicTimeout = null;
 scenes.onChange((el) => {
   if (!el) return;
 
+  // Stop any active slideshows, carousels, or page transitions when changing scenes
+  stopAllRoomAnimations();
+
   if (surpriseMusicTimeout) {
     clearTimeout(surpriseMusicTimeout);
     surpriseMusicTimeout = null;
@@ -120,6 +129,14 @@ scenes.onChange((el) => {
     } else {
       audio.play(map[0], map[1]);
     }
+  }
+
+    if (el.id === "memoriesScene") {
+    renderMemories(openModal);
+  } else if (el.id === "journeyScene") {
+    renderTimeline();
+  } else if (el.id === "reasonsScene") {
+    renderReasons();
   }
 
   if (el.id === "galaxyScene") {
@@ -423,16 +440,19 @@ class ConfettiParticle {
   constructor() {
     this.x = Math.random() * window.innerWidth;
     this.y = -20;
-    this.size = Math.random() * 5 + 3;
+    this.size = Math.random() * 4.5 + 1.5;
     this.color = Math.random() > 0.5 ? "#d9b26a" : "#f2c6d1";
-    this.speed = Math.random() * 2.5 + 1.5;
+    this.speed = Math.random() * 1.8 + 1.0;
     this.angle = Math.random() * Math.PI * 2;
-    this.spin = Math.random() * 0.2 - 0.1;
+    this.spin = Math.random() * 0.08 - 0.04;
+    this.alpha = Math.random() * 0.4 + 0.6;
+    this.twinklePhase = Math.random() * Math.PI * 2;
   }
   update() {
     this.y += this.speed;
-    this.x += Math.sin(this.angle) * 0.5;
+    this.x += Math.sin(this.angle) * 0.4;
     this.angle += this.spin;
+    this.twinklePhase += 0.05;
     if (this.y > window.innerHeight + 10) {
       this.y = -20;
       this.x = Math.random() * window.innerWidth;
@@ -440,50 +460,438 @@ class ConfettiParticle {
   }
   draw() {
     ctx.save();
+    const currentAlpha = this.alpha * (0.7 + Math.sin(this.twinklePhase) * 0.3);
+    ctx.globalAlpha = currentAlpha;
+    ctx.shadowBlur = this.size * 2.5;
+    ctx.shadowColor = this.color;
     ctx.fillStyle = this.color;
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.angle);
-    ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 }
 
-class CakeConfettiParticle {
-  constructor(x, y) {
+// ---------- Celebration Stage Canvas Engine ----------
+let celebrationCanvas = null;
+let celCtx = null;
+let celParticles = [];
+let celShockwaves = [];
+let celEmitters = [];
+let celCanvasActive = false;
+let celAnimationFrameId = null;
+let celGlowRadius = 0; // Grows during anticipation
+let celGlowCenter = { x: 0, y: 0 };
+
+class CelParticle {
+  constructor(x, y, role = "blast", options = {}) {
     this.x = x;
     this.y = y;
-    this.size = Math.random() * 6 + 4;
-    const colors = ["#ffd700", "#ff4b5c", "#fdfaf2", "#e0b04c", "#ff9200", "#4da8da"];
-    this.color = colors[Math.floor(Math.random() * colors.length)];
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 10 + 4;
+    this.role = role; // "blast", "fountain", "vortex", "ambient"
+
+    // Core physics
+    const angle = options.angle !== undefined ? options.angle : Math.random() * Math.PI * 2;
+    const speed = options.speed !== undefined ? options.speed : Math.random() * 8 + 2;
+
     this.vx = Math.cos(angle) * speed;
-    this.vy = Math.sin(angle) * speed - (Math.random() * 4 + 2); // Blast upwards initial force
-    this.gravity = 0.22;
-    this.alpha = 1;
-    this.decay = Math.random() * 0.015 + 0.01;
-    this.angle = Math.random() * Math.PI;
-    this.spin = Math.random() * 0.2 - 0.1;
+    this.vy = Math.sin(angle) * speed;
+    this.gravity = options.gravity !== undefined ? options.gravity : 0.05;
+    this.friction = options.friction !== undefined ? options.friction : 0.98;
+    this.alpha = 1.0;
+    this.decay = options.decay !== undefined ? options.decay : Math.random() * 0.015 + 0.008;
+
+    // Aesthetic properties
+    this.size = options.size !== undefined ? options.size : Math.random() * 3 + 1.2;
+    this.baseSize = this.size;
+
+    // Beautiful color palette: warm gold, glowing yellow, sparkling white, rose gold
+    const colors = [
+      "#ffd700", // Bright gold
+      "#d9b26a", // Soft vintage gold
+      "#fffaf0", // Warm cream white
+      "#f2c6d1", // Champagne pink
+      "#ffbe76", // Peach orange glow
+      "#ffffff", // Pure diamond white
+    ];
+    this.color = options.color || colors[Math.floor(Math.random() * colors.length)];
+
+    // Twinkle & Pulsation
+    this.twinkleSpeed = Math.random() * 0.15 + 0.05;
+    this.twinklePhase = Math.random() * Math.PI * 2;
+
+    // Determine if it should be a majestic 4-point star flare
+    this.isFlare =
+      options.isFlare !== undefined ? options.isFlare : Math.random() > 0.85 && role === "blast";
+
+    // Vortex-specific fields
+    if (role === "vortex") {
+      this.targetX = options.targetX;
+      this.targetY = options.targetY;
+      this.orbitRadius = Math.random() * 120 + 80;
+      this.orbitAngle = Math.random() * Math.PI * 2;
+      this.orbitSpeed = (Math.random() * 0.08 + 0.04) * (Math.random() > 0.5 ? 1 : -1);
+      this.decay = 0.02; // disappear as they reach center
+      this.alpha = 0; // fade in
+    }
   }
+
   update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    this.vy += this.gravity;
-    this.vx *= 0.97;
-    this.vy *= 0.97;
-    this.alpha -= this.decay;
-    this.angle += this.spin;
+    this.twinklePhase += this.twinkleSpeed;
+
+    if (this.role === "vortex") {
+      // Spiral inwards toward target
+      this.orbitAngle += this.orbitSpeed;
+      this.orbitRadius *= 0.96; // pull inwards
+      this.x = this.targetX + Math.cos(this.orbitAngle) * this.orbitRadius;
+      this.y = this.targetY + Math.sin(this.orbitAngle) * this.orbitRadius;
+
+      if (this.alpha < 1.0 && this.orbitRadius > 10) {
+        this.alpha += 0.08;
+      } else if (this.orbitRadius <= 10) {
+        this.alpha -= 0.15;
+      }
+      this.size = (1.0 - this.orbitRadius / 200) * this.baseSize + 0.5;
+    } else {
+      // Standard ballistic movement
+      this.x += this.vx;
+      this.y += this.vy;
+
+      this.vx *= this.friction;
+      this.vy *= this.friction;
+      this.vy += this.gravity;
+
+      this.alpha -= this.decay;
+
+      // Let size pulsate slightly
+      this.size = this.baseSize * (1.0 + Math.sin(this.twinklePhase) * 0.25);
+    }
   }
-  draw() {
+
+  draw(ctx) {
     if (this.alpha <= 0) return;
+
     ctx.save();
     ctx.globalAlpha = this.alpha;
-    ctx.fillStyle = this.color;
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.angle);
-    ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+
+    // Premium glow shadow
+    ctx.shadowBlur = this.size * 2.5;
+    ctx.shadowColor = this.color;
+
+    // Twinkle bright flash effect
+    const currentAlpha = Math.sin(this.twinklePhase) > 0.7 ? 1.0 : this.alpha;
+    ctx.globalAlpha = currentAlpha;
+
+    if (this.isFlare) {
+      // Draw a stunning 4-point magic star flare
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - this.size * 2.8);
+      ctx.quadraticCurveTo(this.x, this.y, this.x + this.size * 2.8, this.y);
+      ctx.quadraticCurveTo(this.x, this.y, this.x, this.y + this.size * 2.8);
+      ctx.quadraticCurveTo(this.x, this.y, this.x - this.size * 2.8, this.y);
+      ctx.quadraticCurveTo(this.x, this.y, this.x, this.y - this.size * 2.8);
+      ctx.fillStyle = "#ffffff"; // diamond core
+      ctx.fill();
+    } else {
+      // Draw standard beautiful glowing circle
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+    }
+
     ctx.restore();
   }
+}
+
+class CelShockwave {
+  constructor(x, y, options = {}) {
+    this.x = x;
+    this.y = y;
+    this.radius = options.startRadius || 5;
+    this.maxRadius = options.maxRadius || Math.max(window.innerWidth, window.innerHeight) * 0.8;
+    this.alpha = 1.0;
+    this.speed = options.speed || 12;
+    this.lineWidth = options.lineWidth || 4;
+    this.color = options.color || "rgba(217, 178, 106, 0.4)";
+  }
+
+  update() {
+    this.radius += this.speed;
+    this.speed *= 0.98; // slight decay in expansion speed
+    this.alpha = 1.0 - this.radius / this.maxRadius;
+  }
+
+  draw(ctx) {
+    if (this.alpha <= 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = Math.max(0.5, this.lineWidth * this.alpha);
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = "rgba(217, 178, 106, 0.6)";
+
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+class CelEmitter {
+  constructor(x, y, type = "fountain", options = {}) {
+    this.x = x;
+    this.y = y;
+    this.type = type; // "fountain", "ambient"
+    this.active = true;
+    this.ticks = 0;
+    this.duration = options.duration || 180; // duration in frames (3 seconds at 60fps)
+    this.rate = options.rate || 2; // how many particles per frame
+  }
+
+  update(particlesList) {
+    if (!this.active) return;
+    this.ticks++;
+
+    if (this.ticks > this.duration) {
+      this.active = false;
+      return;
+    }
+
+    if (this.type === "fountain") {
+      // Shoot cold firework stardust upwards
+      for (let i = 0; i < this.rate; i++) {
+        const spreadAngle = -Math.PI / 2 + (Math.random() * 0.4 - 0.2); // pointing upwards with slight spread
+        const speed = Math.random() * 6 + 3;
+        particlesList.push(
+          new CelParticle(this.x, this.y, "fountain", {
+            angle: spreadAngle,
+            speed: speed,
+            gravity: 0.12, // stronger gravity pulls them down beautifully
+            friction: 0.985,
+            decay: Math.random() * 0.02 + 0.015,
+            size: Math.random() * 2.2 + 0.8,
+          }),
+        );
+      }
+    } else if (this.type === "ambient") {
+      // Spawns soft background drift rising from the bottom
+      if (Math.random() < 0.15) {
+        particlesList.push(
+          new CelParticle(Math.random() * window.innerWidth, window.innerHeight + 20, "ambient", {
+            angle: -Math.PI / 2 + (Math.random() * 0.2 - 0.1),
+            speed: Math.random() * 0.6 + 0.2,
+            gravity: 0,
+            friction: 1.0,
+            decay: Math.random() * 0.003 + 0.001,
+            size: Math.random() * 1.5 + 0.5,
+            color: "rgba(217, 178, 106, 0.25)",
+          }),
+        );
+      }
+    }
+  }
+}
+
+function initCelebrationCanvas() {
+  celebrationCanvas = document.getElementById("celebrationCanvas");
+  if (!celebrationCanvas) return;
+
+  celCtx = celebrationCanvas.getContext("2d");
+  resizeCelebrationCanvas();
+  window.addEventListener("resize", resizeCelebrationCanvas);
+
+  celParticles = [];
+  celShockwaves = [];
+  celEmitters = [];
+  celCanvasActive = true;
+  celGlowRadius = 0;
+
+  // Set up ambient background floating stars emitter
+  celEmitters.push(new CelEmitter(0, 0, "ambient", { duration: 999999, rate: 1 }));
+
+  animateCelebrationCanvas();
+}
+
+function resizeCelebrationCanvas() {
+  if (!celebrationCanvas) return;
+  celebrationCanvas.width = window.innerWidth;
+  celebrationCanvas.height = window.innerHeight;
+}
+
+function animateCelebrationCanvas() {
+  if (!celCanvasActive || !celCtx) return;
+
+  celCtx.clearRect(0, 0, celebrationCanvas.width, celebrationCanvas.height);
+
+  // Set additive blending for glowing magic stardust!
+  celCtx.globalCompositeOperation = "screen";
+
+  // Draw growing anticipation flare glow
+  if (celGlowRadius > 0.1) {
+    celCtx.save();
+    const grad = celCtx.createRadialGradient(
+      celGlowCenter.x,
+      celGlowCenter.y,
+      0,
+      celGlowCenter.x,
+      celGlowCenter.y,
+      celGlowRadius,
+    );
+    grad.addColorStop(0, "rgba(255, 230, 160, 0.65)");
+    grad.addColorStop(0.3, "rgba(217, 178, 106, 0.35)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+    celCtx.fillStyle = grad;
+    celCtx.shadowBlur = celGlowRadius * 0.4;
+    celCtx.shadowColor = "#d9b26a";
+    celCtx.beginPath();
+    celCtx.arc(celGlowCenter.x, celGlowCenter.y, celGlowRadius, 0, Math.PI * 2);
+    celCtx.fill();
+    celCtx.restore();
+  }
+
+  // Update and draw emitters
+  celEmitters.forEach((e) => e.update(celParticles));
+
+  // Update and draw shockwaves
+  celShockwaves = celShockwaves.filter((s) => {
+    s.update();
+    s.draw(celCtx);
+    return s.alpha > 0;
+  });
+
+  // Update and draw particles
+  celParticles = celParticles.filter((p) => {
+    p.update();
+    p.draw(celCtx);
+    return p.alpha > 0;
+  });
+
+  celAnimationFrameId = requestAnimationFrame(animateCelebrationCanvas);
+}
+
+function triggerCelebrationAnticipation(centerX, centerY) {
+  celGlowCenter = { x: centerX, y: centerY };
+
+  const proxy = { glow: 0 };
+  gsap.to(proxy, {
+    glow: 90,
+    duration: 1.8,
+    ease: "sine.in",
+    onUpdate: () => {
+      celGlowRadius = proxy.glow;
+    },
+  });
+
+  const spiralInterval = setInterval(() => {
+    if (!celCanvasActive) {
+      clearInterval(spiralInterval);
+      return;
+    }
+    for (let i = 0; i < 8; i++) {
+      celParticles.push(
+        new CelParticle(0, 0, "vortex", {
+          targetX: centerX,
+          targetY: centerY,
+          size: Math.random() * 2.5 + 1.2,
+          baseSize: Math.random() * 2.5 + 1.2,
+        }),
+      );
+    }
+  }, 50);
+
+  setTimeout(() => {
+    clearInterval(spiralInterval);
+  }, 1800);
+}
+
+function triggerPremiumCelebrationBlast(centerX, centerY) {
+  gsap.to(window, {
+    duration: 0.2,
+    onComplete: () => {
+      celGlowRadius = 0;
+    },
+  });
+
+  const blastCount = 280;
+  for (let i = 0; i < blastCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 12 + 2;
+    celParticles.push(
+      new CelParticle(centerX, centerY, "blast", {
+        angle: angle,
+        speed: speed,
+        gravity: 0.05,
+        friction: 0.975,
+        decay: Math.random() * 0.012 + 0.005,
+        size: Math.random() * 4.5 + 1.5,
+        isFlare: Math.random() > 0.82,
+      }),
+    );
+  }
+
+  celShockwaves.push(
+    new CelShockwave(centerX, centerY, {
+      speed: 10,
+      lineWidth: 5,
+      maxRadius: window.innerWidth * 0.7,
+    }),
+  );
+  setTimeout(() => {
+    if (celCanvasActive) {
+      celShockwaves.push(
+        new CelShockwave(centerX, centerY, {
+          speed: 15,
+          lineWidth: 2,
+          maxRadius: window.innerWidth * 0.9,
+        }),
+      );
+    }
+  }, 180);
+  setTimeout(() => {
+    if (celCanvasActive) {
+      celShockwaves.push(
+        new CelShockwave(centerX, centerY, {
+          speed: 7,
+          lineWidth: 3,
+          maxRadius: window.innerWidth * 0.6,
+        }),
+      );
+    }
+  }, 350);
+
+  celEmitters.push(new CelEmitter(centerX, centerY - 20, "fountain", { duration: 210, rate: 3 }));
+  celEmitters.push(
+    new CelEmitter(centerX - 40, centerY - 10, "fountain", { duration: 160, rate: 2 }),
+  );
+  celEmitters.push(
+    new CelEmitter(centerX + 40, centerY - 10, "fountain", { duration: 160, rate: 2 }),
+  );
+
+  const flash = document.createElement("div");
+  flash.setAttribute(
+    "style",
+    `
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(217,178,106,0.9) 40%, rgba(0,0,0,0) 80%);
+    opacity: 0;
+    z-index: 99;
+    pointer-events: none;
+  `,
+  );
+  document.getElementById("celebrationStage").appendChild(flash);
+
+  gsap
+    .timeline()
+    .to(flash, { opacity: 0.9, duration: 0.12, ease: "power2.out" })
+    .to(flash, {
+      opacity: 0,
+      duration: 1.2,
+      ease: "power3.inOut",
+      onComplete: () => flash.remove(),
+    });
 }
 
 function initSurpriseParticles() {
@@ -1142,7 +1550,7 @@ function spawnCelebrationPaperSlip(containerId = "celebrationStage") {
   const slip = document.createElement("div");
   slip.className = "celebration-paper-slip";
 
-  // Hand-written short messages for the cute paper slips
+  // Hand-written short messages for the cute banners
   const phrases = [
     "Resilient Mind 🧠",
     "Gentle Soul 🌸",
@@ -1163,53 +1571,51 @@ function spawnCelebrationPaperSlip(containerId = "celebrationStage") {
 
   slip.textContent = phrases[Math.floor(Math.random() * phrases.length)];
 
-  // Soft, warm pastel colors mimicking elegant paper sheets
-  const rColors = ["#fcf8f2", "#f9f3eb", "#fdfcf7", "#fef9f3", "#f9f6f0"];
-  const bgColor = rColors[Math.floor(Math.random() * rColors.length)];
-
+  // Elegant transparent bubble style with thin golden border and glow
   slip.setAttribute(
     "style",
     `
     position: absolute;
-    top: -80px;
-    left: ${Math.random() * 90 + 5}%;
-    background-color: ${bgColor};
-    border-left: 3px solid #e0b04c;
-    color: #4a3c28;
-    padding: 6px 12px;
+    bottom: -100px;
+    left: ${Math.random() * 80 + 10}%;
+    background-color: rgba(217, 178, 106, 0.03);
+    border: 1px solid rgba(217, 178, 106, 0.18);
+    color: var(--c-gold-soft);
+    padding: 8px 18px;
     font-family: var(--f-handwritten);
-    font-size: clamp(0.9rem, 1.8vh, 1.15rem);
-    font-weight: 600;
+    font-size: clamp(1rem, 2.1vh, 1.3rem);
+    font-weight: 500;
     white-space: nowrap;
-    border-radius: 2px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1);
+    border-radius: 30px;
+    box-shadow: 0 0 15px rgba(217, 178, 106, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(4px);
     opacity: 0;
     pointer-events: none;
     z-index: 1;
+    text-shadow: 0 0 8px rgba(217, 178, 106, 0.35);
   `,
   );
 
   stage.appendChild(slip);
 
-  const duration = Math.random() * 10 + 10; // Slow, romantic drop of 10-20 seconds
-  const rotateStart = Math.random() * 40 - 20;
-  const rotateEnd = rotateStart + (Math.random() * 60 - 30);
-  const swayWidth = Math.random() * 100 - 50;
+  const duration = Math.random() * 12 + 14; // Ultra slow, elegant float of 14-26 seconds
+  const swayWidth = Math.random() * 80 - 40;
 
   gsap
     .timeline({
       onComplete: () => slip.remove(),
     })
     .to(slip, {
-      opacity: Math.random() * 0.25 + 0.45,
-      duration: 2.5,
-      ease: "power1.out",
+      opacity: Math.random() * 0.25 + 0.35, // Very soft opacity so they stay in the background
+      duration: 3,
+      ease: "power2.out",
     })
     .to(
       slip,
       {
-        y: window.innerHeight + 160,
-        rotation: rotateEnd,
+        y: -window.innerHeight - 200,
+        x: `+=${swayWidth}`,
+        rotation: Math.random() * 20 - 10,
         duration: duration,
         ease: "none",
       },
@@ -1218,20 +1624,9 @@ function spawnCelebrationPaperSlip(containerId = "celebrationStage") {
     .to(
       slip,
       {
-        x: `+=${swayWidth}`,
-        duration: duration / 3,
-        yoyo: true,
-        repeat: 2,
-        ease: "sine.inOut",
-      },
-      0,
-    )
-    .to(
-      slip,
-      {
         opacity: 0,
-        duration: 2.5,
-        delay: duration - 2.5,
+        duration: 3,
+        delay: duration - 3,
         ease: "power1.in",
       },
       0,
@@ -1349,8 +1744,9 @@ function startGrandBirthdayCelebration() {
     "assets/photos/IMG-20251231-WA0029.jpg";
   celebrantImgEl.style.backgroundImage = `url('${photoUrl}')`;
 
-  // Reveal celebration stage
+  // Reveal celebration stage & activate celebration canvas
   stage.style.pointerEvents = "auto";
+  initCelebrationCanvas();
   gsap.to(stage, { opacity: 1, duration: 1.8, ease: "power2.out" });
 
   // Start background paper slips and ambient golden text loops
@@ -1382,63 +1778,121 @@ function startGrandBirthdayCelebration() {
     if (!candlesBlown) {
       candlesBlown = true;
 
-      // 1. Blow out flames
-      flames.forEach((flame) => {
-        gsap.to(flame, { scale: 0, opacity: 0, duration: 0.4, ease: "power2.in" });
-      });
-      wicks.forEach((wick) => {
-        wick.style.backgroundColor = "#222";
-      });
-
-      // 2. Continuous falling confetti
-      startConfetti();
-
-      // 3. Epic stardust explosion from cake center
       const rect = cakeContainer.getBoundingClientRect();
       const cakeCenterX = rect.left + rect.width / 2;
       const cakeCenterY = rect.top + rect.height / 3;
-      triggerCakeExplosion(cakeCenterX, cakeCenterY);
 
-      // 4. Update helper message
-      gsap.to(prompt, {
-        opacity: 0,
-        duration: 0.5,
-        onComplete: () => {
-          prompt.innerHTML = "Tap the cake for more magical stardust! ✨🎂";
-          gsap.to(prompt, { opacity: 0.85, duration: 1, delay: 1.5 });
-        },
+      // 1. Build up Phase (Anticipation Sensation) - 1.8 seconds
+      // Vibrate the cake and photo frame with increasing intensity
+      gsap.to(cakeContainer, {
+        x: "random(-4, 4)",
+        y: "random(-2, 2)",
+        duration: 0.05,
+        repeat: 35,
+        yoyo: true,
+        ease: "none",
+      });
+      gsap.to("#celebrationFrame", {
+        x: "random(-2, 2)",
+        y: "random(-1, 1)",
+        duration: 0.05,
+        repeat: 35,
+        yoyo: true,
+        ease: "none",
       });
 
-      // 5. Reveal grand celebratory title
-      gsap.to(greeting, {
-        opacity: 1,
-        scale: 1,
-        duration: 1.5,
-        ease: "elastic.out(1, 0.6)",
-        delay: 0.4,
+      // Wildly flicker and intensify the candle flames
+      flames.forEach((flame) => {
+        gsap.to(flame, {
+          scale: 1.6,
+          duration: 0.15,
+          repeat: 11,
+          yoyo: true,
+          ease: "sine.inOut",
+        });
       });
 
-      // 6. Reveal soft emotional sub
-      gsap.to(sub, {
-        opacity: 1,
-        y: 0,
-        duration: 1.5,
-        ease: "power2.out",
-        delay: 0.8,
-      });
+      // Trigger the swirl vortex stardust drawing inwards
+      triggerCelebrationAnticipation(cakeCenterX, cakeCenterY);
 
-      // Cascade shooting stars
-      for (let s = 0; s < 3; s++) {
-        setTimeout(triggerShootingStar, s * 400);
-      }
+      // Fade out current helper prompt
+      gsap.to(prompt, { opacity: 0, duration: 0.4 });
+
+      // 2. The Grand Explosion Phase (Occurs after 1.8s build-up)
+      setTimeout(() => {
+        // Blow out flames physically
+        flames.forEach((flame) => {
+          gsap.to(flame, { scale: 0, opacity: 0, duration: 0.4, ease: "power2.in" });
+        });
+        wicks.forEach((wick) => {
+          wick.style.backgroundColor = "#222";
+        });
+
+        // Continuous falling background stardust (replaces square paper confetti)
+        startConfetti();
+
+        // Trigger the spectacular premium radial supernova stardust explosion and fountains
+        triggerPremiumCelebrationBlast(cakeCenterX, cakeCenterY);
+
+        // Update helper message
+        prompt.innerHTML = "Tap the cake for more magical stardust! ✨🎂";
+        gsap.to(prompt, { opacity: 0.85, duration: 1, delay: 1.5 });
+
+        // Reveal grand celebratory title
+        gsap.to(greeting, {
+          opacity: 1,
+          scale: 1,
+          duration: 1.5,
+          ease: "elastic.out(1, 0.6)",
+        });
+
+        // Reveal soft emotional sub
+        gsap.to(sub, {
+          opacity: 1,
+          y: 0,
+          duration: 1.5,
+          ease: "power2.out",
+          delay: 0.3,
+        });
+
+        // Cascade shooting stars
+        for (let s = 0; s < 3; s++) {
+          setTimeout(triggerShootingStar, s * 400);
+        }
+      }, 1800);
     } else {
       // Cake clicked again: launch extra stardust!
       const rect = cakeContainer.getBoundingClientRect();
       const cakeCenterX = rect.left + rect.width / 2;
       const cakeCenterY = rect.top + rect.height / 3;
-      triggerCakeExplosion(cakeCenterX, cakeCenterY);
 
-      gsap.to(cakeContainer, { scale: 0.63, duration: 0.1, yoyo: true, repeat: 1 });
+      // Launch extra stardust particles on the celebration canvas
+      for (let i = 0; i < 90; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 1.5;
+        celParticles.push(
+          new CelParticle(cakeCenterX, cakeCenterY, "blast", {
+            angle: angle,
+            speed: speed,
+            gravity: 0.06,
+            friction: 0.98,
+            decay: Math.random() * 0.02 + 0.01,
+            size: Math.random() * 3.5 + 1.2,
+          }),
+        );
+      }
+
+      // Small secondary shockwave
+      celShockwaves.push(
+        new CelShockwave(cakeCenterX, cakeCenterY, { speed: 8, lineWidth: 2, maxRadius: 250 }),
+      );
+
+      // Soft cake punch recoil
+      gsap.fromTo(
+        cakeContainer,
+        { scale: 0.61 },
+        { scale: 0.68, duration: 0.4, ease: "elastic.out(1, 0.3)" },
+      );
     }
   };
 
@@ -1446,9 +1900,7 @@ function startGrandBirthdayCelebration() {
 }
 
 function triggerCakeExplosion(centerX, centerY) {
-  for (let i = 0; i < 120; i++) {
-    confettiList.push(new CakeConfettiParticle(centerX, centerY));
-  }
+  triggerPremiumCelebrationBlast(centerX, centerY);
 }
 
 function startConfetti() {
@@ -1486,10 +1938,240 @@ $("#muteBtn").addEventListener("click", () => {
   $("#muteBtn").textContent = muted ? "♪̷" : "♪";
 });
 
-// ---------- Countdown Management ----------
+// ---------- Countdown Management & High-Fidelity Canvas Effects ----------
+let countdownMuted = true;
 let countdownInterval = null;
 let countdownSlipsInterval = null;
 let countdownTextsInterval = null;
+
+let countdownCanvas = null;
+let cdCtx = null;
+let cdParticles = [];
+let cdBlastParticles = [];
+let cdShockwaves = [];
+let cdCanvasActive = false;
+let cdAnimationFrameId = null;
+
+function updateCountdownMuteButton() {
+  const cdUnmuteIcon = document.getElementById("cdUnmuteIcon");
+  const cdUnmuteText = document.getElementById("cdUnmuteText");
+  if (countdownMuted) {
+    if (cdUnmuteIcon) cdUnmuteIcon.textContent = "🔊";
+    if (cdUnmuteText) cdUnmuteText.textContent = "PLAY AMBIENT MUSIC";
+  } else {
+    if (cdUnmuteIcon) cdUnmuteIcon.textContent = "🔇";
+    if (cdUnmuteText) cdUnmuteText.textContent = "MUTE AMBIENT MUSIC";
+  }
+}
+
+class CDStarParticle {
+  constructor(x, y, isBlast = false, angle = 0, speed = 0) {
+    this.x = x;
+    this.y = y;
+    this.isBlast = isBlast;
+
+    if (isBlast) {
+      this.size = Math.random() * 4.0 + 1.2;
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed;
+      this.gravity = 0.04;
+      this.friction = 0.965;
+      this.alpha = 1.0;
+      this.decay = Math.random() * 0.009 + 0.005;
+      this.color =
+        Math.random() > 0.45
+          ? `hsla(${(Math.random() * 25 + 35) % 360}, 95%, 75%, 1)` // Gold shimmer
+          : `hsla(${(Math.random() * 15 + 345) % 360}, 100%, 85%, 1)`; // Silver-pink sparkle
+    } else {
+      // Background drifting particles
+      this.size = Math.random() * 1.6 + 0.4;
+      this.vx = (Math.random() - 0.5) * 0.25;
+      this.vy = -(Math.random() * 0.4 + 0.12);
+      this.alpha = Math.random() * 0.4 + 0.15;
+      this.color = `rgba(217, 178, 106, ${this.alpha})`;
+      this.swaySpeed = Math.random() * 0.012 + 0.004;
+      this.swayAmt = Math.random() * 0.4 + 0.15;
+      this.angle = Math.random() * Math.PI * 2;
+    }
+  }
+
+  update() {
+    if (this.isBlast) {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.vx *= this.friction;
+      this.vy *= this.friction;
+      this.vy += this.gravity;
+      this.alpha -= this.decay;
+    } else {
+      this.y += this.vy;
+      this.x += this.vx + Math.sin(this.angle) * this.swayAmt;
+      this.angle += this.swaySpeed;
+      if (this.y < -15) {
+        this.y = window.innerHeight + 15;
+        this.x = Math.random() * window.innerWidth;
+      }
+    }
+  }
+
+  draw() {
+    if (this.alpha <= 0) return;
+    cdCtx.save();
+    cdCtx.globalAlpha = this.alpha;
+    if (this.isBlast) {
+      cdCtx.shadowBlur = Math.random() > 0.5 ? 14 : 7;
+      cdCtx.shadowColor = this.color;
+      cdCtx.fillStyle = "#ffffff"; // Diamond core brightness
+    } else {
+      cdCtx.fillStyle = this.color;
+    }
+    cdCtx.beginPath();
+    cdCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    cdCtx.fill();
+    cdCtx.restore();
+  }
+}
+
+class CDShockwave {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.radius = 5;
+    this.maxRadius = Math.max(window.innerWidth, window.innerHeight) * 0.95;
+    this.alpha = 1.0;
+    this.speed = 14;
+    this.width = 4;
+  }
+
+  update() {
+    this.radius += this.speed;
+    this.speed *= 0.985;
+    this.alpha = 1.0 - this.radius / this.maxRadius;
+    this.width = Math.max(0.5, 5 * this.alpha);
+  }
+
+  draw() {
+    if (this.alpha <= 0) return;
+    cdCtx.save();
+    cdCtx.globalAlpha = this.alpha;
+    cdCtx.strokeStyle = `rgba(217, 178, 106, ${this.alpha * 0.7})`;
+    cdCtx.lineWidth = this.width;
+    cdCtx.shadowBlur = 25;
+    cdCtx.shadowColor = "rgba(217, 178, 106, 0.55)";
+    cdCtx.beginPath();
+    cdCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    cdCtx.stroke();
+    cdCtx.restore();
+  }
+}
+
+function initCountdownCanvas() {
+  countdownCanvas = document.getElementById("countdownCanvas");
+  if (!countdownCanvas) return;
+
+  cdCtx = countdownCanvas.getContext("2d");
+  resizeCountdownCanvas();
+  window.addEventListener("resize", resizeCountdownCanvas);
+
+  cdParticles = [];
+  cdBlastParticles = [];
+  cdShockwaves = [];
+  cdCanvasActive = true;
+
+  // Populate background stardust
+  for (let i = 0; i < 90; i++) {
+    cdParticles.push(
+      new CDStarParticle(
+        Math.random() * window.innerWidth,
+        Math.random() * window.innerHeight,
+        false,
+      ),
+    );
+  }
+
+  animateCountdownCanvas();
+}
+
+function resizeCountdownCanvas() {
+  if (!countdownCanvas) return;
+  countdownCanvas.width = window.innerWidth;
+  countdownCanvas.height = window.innerHeight;
+}
+
+function animateCountdownCanvas() {
+  if (!cdCanvasActive || !cdCtx) return;
+
+  cdCtx.clearRect(0, 0, countdownCanvas.width, countdownCanvas.height);
+
+  // Update background stars
+  cdParticles.forEach((p) => {
+    p.update();
+    p.draw();
+  });
+
+  // Update and draw blast particles
+  cdBlastParticles = cdBlastParticles.filter((p) => {
+    p.update();
+    p.draw();
+    return p.alpha > 0;
+  });
+
+  // Update and draw shockwaves
+  cdShockwaves = cdShockwaves.filter((s) => {
+    s.update();
+    s.draw();
+    return s.alpha > 0;
+  });
+
+  cdAnimationFrameId = requestAnimationFrame(animateCountdownCanvas);
+}
+
+function triggerCountdownSupernova() {
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+
+  // 1. Fire multi-layered expanding shockwaves
+  cdShockwaves.push(new CDShockwave(centerX, centerY));
+  setTimeout(() => {
+    if (cdCanvasActive) cdShockwaves.push(new CDShockwave(centerX, centerY));
+  }, 200);
+  setTimeout(() => {
+    if (cdCanvasActive) cdShockwaves.push(new CDShockwave(centerX, centerY));
+  }, 420);
+
+  // 2. Blast 220 shimmering golden sparks radially
+  const starCount = 220;
+  for (let i = 0; i < starCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 15 + 2.5;
+    cdBlastParticles.push(new CDStarParticle(centerX, centerY, true, angle, speed));
+  }
+
+  // 3. Ignite screen flash overlay
+  const flash = document.createElement("div");
+  flash.setAttribute(
+    "style",
+    `
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(217,178,106,0.95) 45%, rgba(0,0,0,0) 80%);
+    opacity: 0;
+    z-index: 99;
+    pointer-events: none;
+  `,
+  );
+  document.getElementById("countdownScene").appendChild(flash);
+
+  gsap
+    .timeline()
+    .to(flash, { opacity: 0.95, duration: 0.15, ease: "power2.out" })
+    .to(flash, {
+      opacity: 0,
+      duration: 1.4,
+      ease: "power3.inOut",
+      onComplete: () => flash.remove(),
+    });
+}
 
 function initCountdown() {
   const countdownScene = document.getElementById("countdownScene");
@@ -1516,6 +2198,9 @@ function initCountdown() {
   countdownScene.classList.add("is-active");
   enterScene.classList.remove("is-active");
   scenes.current = countdownScene;
+
+  // Initialize gorgeous particle canvas
+  initCountdownCanvas();
 
   // Start the background ambient elements for the countdown screen
   countdownSlipsInterval = setInterval(() => spawnCelebrationPaperSlip("countdownScene"), 2800);
@@ -1559,10 +2244,7 @@ function initCountdown() {
   countdownInterval = setInterval(updateCountdown, 1000);
 
   // Attach countdown unmute/sound activation click
-  let countdownMuted = true;
   const cdUnmuteBtn = document.getElementById("cdUnmuteBtn");
-  const cdUnmuteIcon = document.getElementById("cdUnmuteIcon");
-  const cdUnmuteText = document.getElementById("cdUnmuteText");
 
   if (cdUnmuteBtn) {
     cdUnmuteBtn.addEventListener("click", (e) => {
@@ -1570,16 +2252,14 @@ function initCountdown() {
       if (countdownMuted) {
         audio.play("countdown", config.countdownMusic || music.countdown);
         countdownMuted = false;
-        if (cdUnmuteIcon) cdUnmuteIcon.textContent = "🔇";
-        if (cdUnmuteText) cdUnmuteText.textContent = "MUTE AMBIENT MUSIC";
       } else {
         audio.stop();
         countdownMuted = true;
-        if (cdUnmuteIcon) cdUnmuteIcon.textContent = "🔊";
-        if (cdUnmuteText) cdUnmuteText.textContent = "PLAY AMBIENT MUSIC";
       }
+      updateCountdownMuteButton();
     });
   }
+  updateCountdownMuteButton();
 }
 
 function triggerCountdownBlast() {
@@ -1587,95 +2267,37 @@ function triggerCountdownBlast() {
   const enterScene = document.getElementById("enterScene");
 
   // Play background song or a festive audio track for the transition
-  audio.play("intro", music.intro);
-
-  // Trigger a magnificent particle explosion on the screen!
-  const centerX = window.innerWidth / 2;
-  const centerY = window.innerHeight / 2;
-  triggerCakeExplosion(centerX, centerY);
-
-  // Spawn a huge cloud of falling paper slips & floating texts
-  for (let i = 0; i < 15; i++) {
-    setTimeout(() => {
-      const slip = document.createElement("div");
-      slip.className = "celebration-paper-slip";
-      const phrases = [
-        "Unbreakable Anchor ⚓",
-        "Eloquent Spirit ✒️",
-        "Dignified Queen 👑",
-        "Purest Heart 💛",
-        "An Unstoppable Force 💫",
-        "Elegance Personified 🏛️",
-        "Infinite Radiance ☀️",
-        "Gentle Soul 🌸",
-      ];
-      slip.textContent = phrases[Math.floor(Math.random() * phrases.length)];
-      const rColors = ["#fcf8f2", "#f9f3eb", "#fdfcf7", "#fef9f3", "#f9f6f0"];
-      slip.setAttribute(
-        "style",
-        `
-        position: absolute;
-        top: ${Math.random() * 40 + 30}%;
-        left: ${Math.random() * 80 + 10}%;
-        background-color: ${rColors[Math.floor(Math.random() * rColors.length)]};
-        border-left: 3px solid #e0b04c;
-        color: #4a3c28;
-        padding: 8px 16px;
-        font-family: var(--f-handwritten);
-        font-size: 1.2rem;
-        font-weight: 600;
-        white-space: nowrap;
-        border-radius: 4px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        opacity: 0;
-        z-index: 100;
-        pointer-events: none;
-      `,
-      );
-      document.body.appendChild(slip);
-
-      gsap
-        .timeline({ onComplete: () => slip.remove() })
-        .to(slip, { scale: 1.3, opacity: 1, duration: 0.5 })
-        .to(
-          slip,
-          {
-            y: -200 - Math.random() * 200,
-            x: (Math.random() - 0.5) * 300,
-            rotation: Math.random() * 90 - 45,
-            opacity: 0,
-            scale: 0.8,
-            duration: 3,
-            ease: "power2.out",
-          },
-          0.5,
-        );
-    }, i * 150);
-  }
+  audio.stop();
+  // Trigger a spectacular radial supernova canvas blast with shockwaves!
+  triggerCountdownSupernova();
 
   // Shake the entire countdown scene and zoom it out!
   gsap
     .timeline()
     .to(countdownScene, {
-      x: () => Math.random() * 20 - 10,
-      y: () => Math.random() * 20 - 10,
+      x: () => Math.random() * 24 - 12,
+      y: () => Math.random() * 24 - 12,
       duration: 0.05,
-      repeat: 15,
+      repeat: 22,
       yoyo: true,
     })
     .to(
       countdownScene,
       {
-        scale: 1.15,
-        filter: "blur(10px)",
+        scale: 1.25,
+        filter: "blur(12px)",
         opacity: 0,
-        duration: 1.5,
+        duration: 1.8,
         ease: "power3.inOut",
       },
       0.8,
     )
     .call(
       () => {
+        // Stop canvas rendering to release CPU resources
+        cdCanvasActive = false;
+        if (cdAnimationFrameId) cancelAnimationFrame(cdAnimationFrameId);
+
         countdownScene.classList.remove("is-active");
         enterScene.classList.add("is-active");
         scenes.current = enterScene;
@@ -1684,14 +2306,45 @@ function triggerCountdownBlast() {
 
         gsap.fromTo(
           ".enter__inner",
-          { scale: 0.9, opacity: 0 },
-          { scale: 1, opacity: 1, duration: 1.2, ease: "power2.out" },
+          { scale: 0.85, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 1.4, ease: "power2.out" },
         );
       },
       null,
-      1.2,
+      1.3,
     );
 }
 
 // ---------- Kick off with the enter or countdown overlay ----------
 initCountdown();
+
+function playDefaultStartingMusic() {
+  const currentSceneId = scenes.current?.id;
+  if (
+    // currentSceneId === "enterScene" ||
+    currentSceneId === "introScene" ||
+    currentSceneId === "passwordScene"
+  ) {
+    audio.play("intro", music.intro);
+  } else if (currentSceneId === "countdownScene") {
+    audio.play("countdown", config.countdownMusic || music.countdown || music.intro);
+    countdownMuted = false;
+    updateCountdownMuteButton();
+  }
+}
+
+// Start playing starting music as default on initial user interaction (bypass browser autoplay limits)
+const startMusicOnInteraction = () => {
+  playDefaultStartingMusic();
+  window.removeEventListener("click", startMusicOnInteraction);
+  window.removeEventListener("touchstart", startMusicOnInteraction);
+};
+window.addEventListener("click", startMusicOnInteraction);
+window.addEventListener("touchstart", startMusicOnInteraction);
+
+// Try immediate autoplay
+try {
+  playDefaultStartingMusic();
+} catch (e) {
+  console.log("Autoplay blocked:", e);
+}

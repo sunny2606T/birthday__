@@ -31,6 +31,7 @@
     <!-- Countdown Overlay (Active until birthday target) -->
     <section id="countdownScene" class="scene scene--countdown">
       <div id="countdownStarryBg" class="countdown__bg"></div>
+      <canvas id="countdownCanvas" style="position: absolute; inset: 0; z-index: 2; pointer-events: none; width: 100%; height: 100%;"></canvas>
       <div class="countdown__inner">
         <p class="countdown__eyebrow">THE STARS ARE ALIGNING FOR</p>
         <h1 class="countdown__title">NIRMITA'S BIRTHDAY</h1>
@@ -494,6 +495,7 @@
           box-sizing: border-box;
         "
       >
+      <canvas id="celebrationCanvas" style="position: absolute; inset: 0; z-index: 11; pointer-events: none; width: 100%; height: 100%;"></canvas>
         <!-- Ambient Sparkle background overlays -->
         <div
           style="

@@ -91,7 +91,7 @@ export default {
   birthday: "27 July",
   countdownMusic: "assets/music/galaxy.mp3",
   password: "Nirmita27@@",
-  countdownTarget: "2026-07-27T00:00:00",
+  countdownTarget: "2026-07-18T05:13:00",
   celebrationPhoto: "assets/photos/IMG-20251231-WA0029.jpg", 
   finalVoiceNote: "", // e.g. "voice/final_voice.mp3" (can be empty, code plays fallback or elegant silent visual flow)
   letter: `On the day the universe was made,
