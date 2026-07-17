@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Story of Nirmita — An Interactive Cinematic Experience</title>
+    <meta name="description" content="An interactive cinematic birthday experience." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Poppins:wght@200;300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <!-- Global canvas layer used by Three.js scenes -->
+    <canvas id="worldCanvas"></canvas>
+
+    <!-- Ambient overlays -->
+    <div id="vignette" class="vignette"></div>
+    <div id="grain" class="grain"></div>
+
+    <!-- HUD -->
+    <div id="hud" class="hud hidden">
+      <!-- <div class="hud__brand">The Story of Us</div> -->
+      <div class="hud__progress"><span id="progressText">0 / 5 Worlds</span></div>
+      <button id="muteBtn" class="hud__mute" aria-label="Toggle sound">♪</button>
+    </div>
+
+    <!-- Countdown Overlay (Active until birthday target) -->
+    <section id="countdownScene" class="scene scene--countdown">
+      <div id="countdownStarryBg" class="countdown__bg"></div>
+      <div class="countdown__inner">
+        <p class="countdown__eyebrow">THE STARS ARE ALIGNING FOR</p>
+        <h1 class="countdown__title">NIRMITA'S BIRTHDAY</h1>
+
+        <div class="countdown__timer">
+          <div class="countdown__unit">
+            <span id="cd-days" class="countdown__number">00</span>
+            <span class="countdown__label">DAYS</span>
+          </div>
+          <div class="countdown__sep">:</div>
+          <div class="countdown__unit">
+            <span id="cd-hours" class="countdown__number">00</span>
+            <span class="countdown__label">HOURS</span>
+          </div>
+          <div class="countdown__sep">:</div>
+          <div class="countdown__unit">
+            <span id="cd-minutes" class="countdown__number">00</span>
+            <span class="countdown__label">MINUTES</span>
+          </div>
+          <div class="countdown__sep">:</div>
+          <div class="countdown__unit">
+            <span id="cd-seconds" class="countdown__number">00</span>
+            <span class="countdown__label">SECONDS</span>
+          </div>
+        </div>
+
+        <p class="countdown__sub">
+          The magical universe is preparing its alignment. Prepare to be amazed. ✨
+        </p>
+
+        <!-- Subtle interactive button for the creator/recipient to preview or bypass early if they wish -->
+        <!-- Elegant sound activation button for the countdown screen -->
+        <button
+          id="cdUnmuteBtn"
+          class="btn btn--ghost"
+          style="
+            margin-top: 2rem;
+            font-size: 0.75rem;
+            padding: 0.6rem 1.5rem;
+            letter-spacing: 0.15em;
+            border-radius: 30px;
+            opacity: 0.85;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: 1px solid rgba(217, 178, 106, 0.4);
+            box-shadow: 0 0 15px rgba(217, 178, 106, 0.1);
+          "
+        >
+          <span id="cdUnmuteIcon">🔊</span> <span id="cdUnmuteText">PLAY AMBIENT MUSIC</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Enter overlay (required for autoplay + audio unlock) -->
+    <section id="enterScene" class="scene scene--enter is-active">
+  <div class="enter__inner">
+
+    <p class="enter__eyebrow">
+      An Interactive Cinematic Birthday Experience
+    </p>
+
+    <h1 class="enter__title">
+      Nirmita's Universe
+    </h1>
+
+    <p class="enter__sub">
+      Every star has a story.<br>
+      Tonight, you'll rediscover yours.<br><br>
+
+      Best experienced with sound.<br>
+      Full screen recommended.
+    </p>
+
+    <button id="enterBtn" class="btn btn--ghost">
+      Begin the Journey ✨
+    </button>
+
+  </div>
+</section>
+
+    <!-- Intro -->
+    <section id="introScene" class="scene">
+      <div class="intro__lines">
+        <p class="intro__line" data-line="1">Somewhere in the universe…</p>
+        <p class="intro__line" data-line="2">a story began.</p>
+        <p class="intro__line" data-line="3">And it was about you.</p>
+      </div>
+    </section>
+
+    <!-- Password -->
+    <section id="passwordScene" class="scene">
+      <div class="pw">
+        <p class="pw__hint">Whisper the word only you would know.</p>
+        <input
+          id="pwInput"
+          class="pw__input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="•  •  •  •  •  •"
+        />
+        <button id="pwBtn" class="btn btn--gold">Enter</button>
+        <p id="pwError" class="pw__error"></p>
+      </div>
+    </section>
+
+    <!-- Birth of universe -->
+    <!-- <section id="birthScene" class="scene">
+      <div class="birth__text">
+        <p class="birth__line" data-line="1">Every universe has billions of stars…</p>
+        <p class="birth__line" data-line="2">But somehow…</p>
+        <p class="birth__line" data-line="3">One became my favorite.</p>
+      </div>
+    </section> -->
+
+    <!-- Galaxy hub -->
+    <section id="galaxyScene" class="scene">
+      <div class="galaxy">
+        <!-- Concentric Space Orbits for Realism -->
+        <div class="galaxy__orbit galaxy__orbit--inner"></div>
+        <div class="galaxy__orbit galaxy__orbit--middle"></div>
+        <div class="galaxy__orbit galaxy__orbit--outer"></div>
+
+        <div class="planet" data-planet="memories" style="--x: 18%; --y: 32%">
+          <div class="planet__orb">
+            <div class="planet__moon"></div>
+          </div>
+          <div class="planet__label">Memories</div>
+        </div>
+        <div class="planet locked" data-planet="voice" style="--x: 78%; --y: 26%">
+          <div class="planet__orb planet__orb--pink"></div>
+          <div class="planet__label">Voice</div>
+        </div>
+        <div class="planet locked" data-planet="journey" style="--x: 82%; --y: 68%">
+          <div class="planet__orb planet__orb--gold">
+            <div class="planet__ring"></div>
+          </div>
+          <div class="planet__label">Her Journey</div>
+        </div>
+        <div class="planet locked" data-planet="reasons" style="--x: 22%; --y: 72%">
+          <div class="planet__orb planet__orb--rose"></div>
+          <div class="planet__label">Her Legacy</div>
+        </div>
+        <div class="planet locked" data-planet="surprise" style="--x: 50%; --y: 50%">
+          <div class="planet__orb planet__orb--final">
+            <div class="planet__sunflare"></div>
+          </div>
+          <div class="planet__label">✦ Surprise</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Planet: Memories -->
+    <section id="memoriesScene" class="scene scene--room">
+      <button class="back" data-back>← back to galaxy</button>
+      <h2 class="section__title">The Memory Room</h2>
+      <p class="section__subtitle">
+        A collection of captured moments, frozen in time and woven with love.
+      </p>
+      <div id="memoriesGrid" class="polaroids"></div>
+    </section>
+
+    <!-- Planet: Voice -->
+    <section id="voiceScene" class="scene scene--room">
+      <button class="back" data-back>← back to galaxy</button>
+      <h2 class="section__title">Whispers</h2>
+      <div id="voiceGrid" class="cassettes"></div>
+    </section>
+
+    <!-- Planet: My Journey -->
+    <section id="journeyScene" class="scene scene--room">
+      <button class="back" data-back>← back to galaxy</button>
+      <h2 class="section__title">A Journey Through Her Universe</h2>
+      <div id="journeyTrack" class="timeline"></div>
+    </section>
+
+    <!-- Planet: Reasons -->
+    <section id="reasonsScene" class="scene scene--room">
+      <button class="back" data-back>← back to galaxy</button>
+      <h2 class="section__title">Her Legacy</h2>
+      <div id="reasonsTree" class="reasons"></div>
+    </section>
+
+    <!-- Planet: Surprise -->
+    <section id="surpriseScene" class="scene">
+      <!-- White screen flash overlay -->
+      <div
+        id="whiteFlash"
+        style="
+          position: absolute;
+          inset: 0;
+          background: #fff;
+          opacity: 0;
+          z-index: 20;
+          pointer-events: none;
+          transition: opacity 0.5s ease;
+        "
+      ></div>
+
+      <!-- Canvas for magical golden stardust & fireflies -->
+      <canvas
+        id="surpriseCanvas"
+        style="
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          pointer-events: none;
+          width: 100%;
+          height: 100%;
+        "
+      ></canvas>
+
+      <!-- Text display -->
+      <div
+        id="surpriseTextContainer"
+        style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 10;
+          pointer-events: none;
+          text-align: center;
+          width: calc(100% - 4rem);
+          max-width: 800px;
+          padding: 2rem;
+          box-sizing: border-box;
+        "
+      >
+        <h2
+          id="surpriseTextTitle"
+          class="surprise-text"
+          style="
+            font-family: var(--f-display);
+            font-size: clamp(1.8rem, 4.5vw, 3.5rem);
+            color: var(--c-gold);
+            text-shadow: 0 0 40px rgba(217, 178, 106, 0.4);
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            line-height: 1.4;
+            font-weight: 300;
+          "
+        ></h2>
+        <p
+          id="surpriseTextDesc"
+          class="surprise-text-desc"
+          style="
+            font-family: var(--f-display);
+            font-style: italic;
+            font-size: clamp(1.1rem, 2.5vw, 1.75rem);
+            color: var(--c-ink-soft);
+            opacity: 0;
+            line-height: 1.8;
+            white-space: pre-line;
+          "
+        ></p>
+      </div>
+
+      <!-- Slideshow Frame -->
+      <div
+        id="surpriseSlideshow"
+        class="surprise-slideshow"
+        style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 5;
+          opacity: 0;
+          pointer-events: none;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          width: calc(100% - 2rem);
+          max-width: 500px;
+          padding: 1rem;
+          box-sizing: border-box;
+        "
+      >
+        <!-- Single Photo element -->
+        <div
+          id="surprisePhotoFrame"
+          style="
+            position: relative;
+            width: auto;
+            max-width: 100%;
+            padding: 1.25rem;
+            background: linear-gradient(145deg, #1a1508, #08060a);
+            border: 1px solid var(--c-gold);
+            box-shadow:
+              0 40px 100px -40px rgba(217, 178, 106, 0.35),
+              inset 0 0 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+          "
+        >
+          <div
+            id="surprisePhotoImg"
+            style="
+              height: 42vh;
+              max-height: 400px;
+              aspect-ratio: 4/5;
+              background-position: center;
+              background-size: cover;
+              border: 1px solid rgba(217, 178, 106, 0.35);
+              width: auto;
+              max-width: 100%;
+            "
+          ></div>
+        </div>
+        <p
+          id="surprisePhotoCaption"
+          style="
+            font-family: var(--f-display);
+            font-style: italic;
+            color: var(--c-gold-soft);
+            font-size: clamp(0.95rem, 2.2vh, 1.25rem);
+            text-align: center;
+            opacity: 0;
+            min-height: 2.2em;
+            line-height: 1.5;
+            max-width: 90%;
+          "
+        ></p>
+      </div>
+
+      <!-- Final Long Letter Overlay -->
+      <div
+        id="surpriseLetterOverlay"
+        style="
+          position: absolute;
+          inset: 0;
+          z-index: 15;
+          background: rgba(5, 6, 10, 0.92);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 1.2s ease;
+        "
+      >
+        <div
+          id="surpriseLetterCard"
+          style="
+            width: min(650px, 90vw);
+            max-height: min(680px, 82vh);
+            background: #fcfaf2;
+            border: 2px solid rgba(217, 178, 106, 0.6);
+            border-radius: 16px;
+            box-shadow:
+              0 35px 80px rgba(0, 0, 0, 0.85),
+              0 0 40px rgba(217, 178, 106, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 2.2rem;
+            box-sizing: border-box;
+            text-align: left;
+            transform: scale(0.9) translateY(30px);
+            transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+            position: relative;
+          "
+        >
+          <!-- Wax seal icon decoration -->
+          <div
+            style="
+              text-align: center;
+              margin-bottom: 0.8rem;
+              font-size: 2.5rem;
+              color: #b89047;
+              text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            "
+          >
+            ✉
+          </div>
+          <!-- Skip Typing Button -->
+          <button
+            id="skipTypingBtn"
+            style="
+              position: absolute;
+              top: 1.5rem;
+              right: 1.5rem;
+              background: rgba(217, 178, 106, 0.12);
+              border: 1px solid rgba(217, 178, 106, 0.3);
+              color: #8e6c2a;
+              font-family: var(--f-display);
+              font-size: 0.7rem;
+              padding: 0.4rem 0.8rem;
+              border-radius: 20px;
+              cursor: pointer;
+              transition: all 0.2s;
+              letter-spacing: 0.05em;
+              display: none;
+            "
+          >
+            Skip Typing
+          </button>
+          <!-- Letter body -->
+          <div
+            id="surpriseLetterScroll"
+            style="
+              flex: 1;
+              overflow-y: auto;
+              padding-right: 1.2rem;
+              font-family: var(--f-handwritten);
+              font-size: clamp(1.35rem, 3vw, 1.75rem);
+              line-height: 1.7;
+              color: #1e1710;
+              white-space: pre-line;
+              scroll-behavior: smooth;
+            "
+          ></div>
+          <!-- Button -->
+          <button
+            id="closeLetterBtn"
+            class="btn btn--gold"
+            style="
+              margin: 1.5rem auto 0;
+              font-family: var(--f-display);
+              letter-spacing: 0.15em;
+              text-transform: uppercase;
+              font-size: 0.85rem;
+              padding: 0.8rem 2.2rem;
+              cursor: pointer;
+              transition: all 0.3s;
+              display: block;
+              opacity: 0;
+              transform: translateY(10px);
+              pointer-events: none;
+            "
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+
+      <!-- Grand Finale Birthday Celebration Stage -->
+      <div
+        id="celebrationStage"
+        style="
+          position: absolute;
+          inset: 0;
+          z-index: 12;
+          background: radial-gradient(circle at 50% 40%, rgba(15, 10, 8, 0.98), rgba(5, 5, 5, 1));
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 1.8s ease;
+          overflow: hidden;
+          padding: 1.5rem 1rem;
+          box-sizing: border-box;
+        "
+      >
+        <!-- Ambient Sparkle background overlays -->
+        <div
+          style="
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(
+              circle at 50% 50%,
+              rgba(217, 178, 106, 0.08) 0%,
+              transparent 70%
+            );
+            pointer-events: none;
+            z-index: 0;
+          "
+        ></div>
+
+        <!-- Main Celebrant Greeting Content Container -->
+        <div
+          id="celebrationCard"
+          style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 620px;
+            text-align: center;
+            z-index: 10;
+            transform: translateY(30px);
+            transition: transform 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+            gap: 0.5rem;
+          "
+        >
+          <!-- Her Beautiful Frame -->
+          <div
+            id="celebrationFrame"
+            style="
+              position: relative;
+              margin-bottom: 0.75rem;
+              padding: 0.5rem 0.5rem 1.5rem;
+              background: #fff linear-gradient(135deg, #fff 0%, #faf8f5 100%);
+              border-radius: 4px;
+              box-shadow:
+                0 15px 35px rgba(0, 0, 0, 0.55),
+                0 3px 10px rgba(0, 0, 0, 0.15);
+              transform: rotate(-1deg);
+              transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+              width: min(170px, 26vh);
+              border: 1px solid rgba(0, 0, 0, 0.06);
+            "
+          >
+            <!-- Pin decoration -->
+            <div
+              style="
+                position: absolute;
+                top: -12px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 14px;
+                height: 14px;
+                background: #b22222;
+                border-radius: 50%;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+                z-index: 5;
+              "
+            ></div>
+            <div
+              style="
+                position: absolute;
+                top: -14px;
+                left: 51%;
+                transform: translateX(-50%) rotate(15deg);
+                width: 2px;
+                height: 12px;
+                background: rgba(255, 255, 255, 0.4);
+                z-index: 6;
+              "
+            ></div>
+
+            <div
+              id="celebrationImg"
+              style="
+                width: 100%;
+                aspect-ratio: 1/1;
+                background-position: center;
+                background-size: cover;
+                box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.15);
+                border-radius: 2px;
+                background-color: #121318;
+              "
+            ></div>
+            <p
+              id="celebrationPhotoCaption"
+              style="
+                font-family: var(--f-handwritten);
+                font-size: clamp(1rem, 2vh, 1.3rem);
+                color: #2d2417;
+                text-align: center;
+                margin-top: 0.5rem;
+                margin-bottom: 0;
+                font-weight: 600;
+                line-height: 1.1;
+              "
+            >
+              Nirmita ✨
+            </p>
+          </div>
+
+          <!-- The Magical 3D Cake -->
+          <div
+            id="birthdayCakeContainer"
+            style="
+              position: relative;
+              width: 180px;
+              height: 130px;
+              margin-bottom: 0.75rem;
+              cursor: pointer;
+              transform: scale(0.68);
+              transform-origin: center bottom;
+            "
+          >
+            <!-- Cake interaction glow -->
+            <div
+              id="cakeGlow"
+              style="
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 200px;
+                height: 30px;
+                background: radial-gradient(ellipse, rgba(217, 178, 106, 0.2) 0%, transparent 75%);
+                filter: blur(5px);
+                z-index: 0;
+                transition: background 0.8s;
+              "
+            ></div>
+
+            <div
+              class="cake"
+              style="
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 180px;
+                z-index: 1;
+              "
+            >
+              <!-- Plate -->
+              <div
+                style="
+                  width: 210px;
+                  height: 12px;
+                  background: linear-gradient(to bottom, #d9b26a, #8e6c2a);
+                  border-radius: 50%;
+                  position: absolute;
+                  bottom: -6px;
+                  left: -15px;
+                  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+                "
+              ></div>
+
+              <!-- Bottom Layer -->
+              <div
+                style="
+                  width: 180px;
+                  height: 50px;
+                  background: linear-gradient(135deg, #2b2015, #1d150d);
+                  border-radius: 10px 10px 0 0;
+                  position: relative;
+                  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.1);
+                "
+              >
+                <!-- Icing drip decor -->
+                <div
+                  style="
+                    width: 100%;
+                    height: 12px;
+                    background: #e0b04c;
+                    border-radius: 0 0 5px 5px;
+                    position: absolute;
+                    top: 0;
+                    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15));
+                  "
+                ></div>
+                <!-- Sprinkles representation in CSS -->
+                <div
+                  style="
+                    position: absolute;
+                    inset: 15px 10px;
+                    background:
+                      radial-gradient(circle at 10% 20%, #ff4b5c 2px, transparent 3px),
+                      radial-gradient(circle at 40% 50%, #4da8da 2px, transparent 3px),
+                      radial-gradient(circle at 75% 30%, #ffd31d 2px, transparent 3px),
+                      radial-gradient(circle at 90% 70%, #9bc53d 2px, transparent 3px);
+                    opacity: 0.85;
+                  "
+                ></div>
+              </div>
+
+              <!-- Middle Layer -->
+              <div
+                style="
+                  width: 140px;
+                  height: 46px;
+                  background: linear-gradient(135deg, #3d2b1a, #2b1d10);
+                  border-radius: 8px 8px 0 0;
+                  position: relative;
+                  margin: 0 auto;
+                  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.1);
+                  margin-top: -6px;
+                  z-index: 2;
+                "
+              >
+                <!-- Cream line -->
+                <div
+                  style="
+                    width: 100%;
+                    height: 10px;
+                    background: #fdfaf2;
+                    border-radius: 0 0 4px 4px;
+                    position: absolute;
+                    top: 0;
+                    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.12));
+                  "
+                ></div>
+                <!-- Middle Layer sprinkles -->
+                <div
+                  style="
+                    position: absolute;
+                    inset: 12px 10px;
+                    background:
+                      radial-gradient(circle at 25% 40%, #ff4b5c 2px, transparent 3px),
+                      radial-gradient(circle at 60% 20%, #4da8da 2px, transparent 3px),
+                      radial-gradient(circle at 80% 60%, #ffd31d 2px, transparent 3px);
+                    opacity: 0.85;
+                  "
+                ></div>
+              </div>
+
+              <!-- Top Layer -->
+              <div
+                style="
+                  width: 100px;
+                  height: 42px;
+                  background: linear-gradient(135deg, #e0b04c, #c09030);
+                  border-radius: 6px 6px 0 0;
+                  position: relative;
+                  margin: 0 auto;
+                  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.25);
+                  margin-top: -6px;
+                  z-index: 3;
+                "
+              >
+                <!-- White Cream swirls -->
+                <div
+                  style="
+                    width: 100%;
+                    height: 8px;
+                    background: #fff;
+                    border-radius: 0 0 3px 3px;
+                    position: absolute;
+                    top: 0;
+                    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+                  "
+                ></div>
+                <div
+                  style="
+                    position: absolute;
+                    top: -6px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 14px;
+                    height: 14px;
+                    background: #ff4b5c;
+                    border-radius: 50%;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    z-index: 4;
+                  "
+                ></div>
+                <!-- Cherry -->
+              </div>
+
+              <!-- Interactive Birthday Candles (3 Candles) -->
+              <div
+                id="candleGroup"
+                style="
+                  position: absolute;
+                  top: -30px;
+                  left: 50%;
+                  transform: translateX(-50%);
+                  width: 80px;
+                  height: 35px;
+                  display: flex;
+                  justify-content: space-around;
+                  z-index: 4;
+                "
+              >
+                <!-- Candle 1 -->
+                <div class="candle-wrapper" style="position: relative; width: 8px; height: 26px">
+                  <div
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      background: linear-gradient(to right, #4da8da, #007cc7);
+                      border-radius: 2px;
+                    "
+                  ></div>
+                  <div
+                    class="candle-wick"
+                    style="
+                      width: 2px;
+                      height: 6px;
+                      background: #333;
+                      position: absolute;
+                      top: -6px;
+                      left: 3px;
+                    "
+                  ></div>
+                  <div
+                    class="candle-flame"
+                    style="
+                      width: 10px;
+                      height: 14px;
+                      background: radial-gradient(
+                        ellipse at bottom,
+                        #ffd31d 0%,
+                        #ff5e36 60%,
+                        transparent 100%
+                      );
+                      border-radius: 50% 50% 20% 20%;
+                      position: absolute;
+                      top: -19px;
+                      left: -1px;
+                      filter: drop-shadow(0 0 4px #ff5e36);
+                      transform-origin: center bottom;
+                      animation: flicker 1.5s infinite alternate ease-in-out;
+                    "
+                  ></div>
+                </div>
+                <!-- Candle 2 (Center) -->
+                <div
+                  class="candle-wrapper"
+                  style="position: relative; width: 8px; height: 30px; top: -4px"
+                >
+                  <div
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      background: linear-gradient(to right, #ff4b5c, #ff1f35);
+                      border-radius: 2px;
+                    "
+                  ></div>
+                  <div
+                    class="candle-wick"
+                    style="
+                      width: 2px;
+                      height: 6px;
+                      background: #333;
+                      position: absolute;
+                      top: -6px;
+                      left: 3px;
+                    "
+                  ></div>
+                  <div
+                    class="candle-flame"
+                    style="
+                      width: 10px;
+                      height: 14px;
+                      background: radial-gradient(
+                        ellipse at bottom,
+                        #ffd31d 0%,
+                        #ff5e36 60%,
+                        transparent 100%
+                      );
+                      border-radius: 50% 50% 20% 20%;
+                      position: absolute;
+                      top: -19px;
+                      left: -1px;
+                      filter: drop-shadow(0 0 5px #ff5e36);
+                      transform-origin: center bottom;
+                      animation: flicker 1.8s infinite alternate ease-in-out;
+                    "
+                  ></div>
+                </div>
+                <!-- Candle 3 -->
+                <div class="candle-wrapper" style="position: relative; width: 8px; height: 26px">
+                  <div
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      background: linear-gradient(to right, #ffd31d, #ff9200);
+                      border-radius: 2px;
+                    "
+                  ></div>
+                  <div
+                    class="candle-wick"
+                    style="
+                      width: 2px;
+                      height: 6px;
+                      background: #333;
+                      position: absolute;
+                      top: -6px;
+                      left: 3px;
+                    "
+                  ></div>
+                  <div
+                    class="candle-flame"
+                    style="
+                      width: 10px;
+                      height: 14px;
+                      background: radial-gradient(
+                        ellipse at bottom,
+                        #ffd31d 0%,
+                        #ff5e36 60%,
+                        transparent 100%
+                      );
+                      border-radius: 50% 50% 20% 20%;
+                      position: absolute;
+                      top: -19px;
+                      left: -1px;
+                      filter: drop-shadow(0 0 4px #ff5e36);
+                      transform-origin: center bottom;
+                      animation: flicker 1.3s infinite alternate ease-in-out;
+                    "
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sparkly instruction text -->
+          <p
+            id="celebrationPrompt"
+            style="
+              font-family: var(--f-display);
+              font-size: clamp(0.75rem, 1.8vh, 0.9rem);
+              color: var(--c-gold-soft);
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
+              margin-bottom: 0.25rem;
+              text-shadow: 0 0 8px rgba(217, 178, 106, 0.45);
+              animation: pulse 2s infinite alternate;
+            "
+          >
+            Make a wish and tap the candles to blow them out ✨
+          </p>
+
+          <!-- Large, stunning greeting message -->
+          <h1
+            id="celebrationGreeting"
+            style="
+              font-family: var(--f-display);
+              font-size: clamp(1.4rem, 4vh, 2.3rem);
+              font-weight: 300;
+              line-height: 1.25;
+              color: #fff;
+              margin-top: 0.5rem;
+              opacity: 0;
+              transform: scale(0.85);
+              transition: all 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+              pointer-events: none;
+            "
+          >
+            <span
+              style="
+                color: var(--c-gold);
+                display: block;
+                text-shadow: 0 0 20px rgba(217, 178, 106, 0.5);
+                font-weight: 400;
+                margin-bottom: 0.25rem;
+              "
+              >HAPPY BIRTHDAY</span
+            >
+            <span style="letter-spacing: 0.05em; text-shadow: 0 0 25px rgba(255, 255, 255, 0.45)"
+              >NIRMITA! 🎂👑💖</span
+            >
+          </h1>
+
+          <!-- Closing wish subtitle -->
+          <p
+            id="celebrationSub"
+            style="
+              font-family: var(--f-handwritten);
+              font-size: clamp(1rem, 2.8vh, 1.45rem);
+              color: #fdfaf2;
+              opacity: 0;
+              transition: all 1.5s ease 0.6s;
+              margin-top: 0.5rem;
+              text-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.8),
+                0 0 12px rgba(217, 178, 106, 0.25);
+            "
+          >
+            May your life be as beautiful as your smile...
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Customizable Question Popup -->
+    <div id="questionPopup" class="modal hidden" aria-hidden="true">
+      <div class="pw">
+        <button id="questionCloseBtn" class="modal__close" aria-label="Close question">×</button>
+        <p id="questionText" class="pw__hint"></p>
+        <input
+          id="questionInput"
+          class="pw__input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Type your answer..."
+        />
+        <button id="questionSubmitBtn" class="btn btn--gold">Enter</button>
+        <p id="questionError" class="pw__error"></p>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal" class="modal hidden" aria-hidden="true">
+      <button class="modal__close" data-close>×</button>
+      <div id="modalContent" class="modal__content"></div>
+    </div>
+
+    <!-- Libraries via CDN (per PRD: HTML/CSS/JS + Three.js + GSAP + Howler) -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>
